@@ -16,6 +16,7 @@ import socket
 import sqlite3
 import threading
 import time
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
@@ -46,8 +47,23 @@ class Store:
         conn.row_factory = sqlite3.Row
         return conn
 
+    @contextmanager
+    def _transaction(self):
+        """Open a connection, commit or roll back, and always close it.
+
+        `with sqlite3.connect(...)` manages the transaction but does *not*
+        close the connection — over a long monitoring run that leaks a file
+        descriptor on every poll.
+        """
+        conn = self._connect()
+        try:
+            with conn:
+                yield conn
+        finally:
+            conn.close()
+
     def _init_schema(self) -> None:
-        with self._connect() as conn:
+        with self._transaction() as conn:
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS checks (
                     id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -65,7 +81,7 @@ class Store:
 
     def record(self, target: str, host: str, port: int, up: bool,
                latency_ms: float | None, error: str | None) -> None:
-        with self._lock, self._connect() as conn:
+        with self._lock, self._transaction() as conn:
             conn.execute(
                 "INSERT INTO checks (target, host, port, up, latency_ms, error,"
                 " checked_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -75,7 +91,7 @@ class Store:
     def latest(self) -> list[dict]:
         """Most recent check for each target, with 24h uptime and averages."""
         since = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
-        with self._connect() as conn:
+        with self._transaction() as conn:
             rows = conn.execute("""
                 SELECT c.*,
                        (SELECT AVG(up) * 100 FROM checks
@@ -93,7 +109,7 @@ class Store:
         return [dict(row) for row in rows]
 
     def history(self, target: str, limit: int = 60) -> list[dict]:
-        with self._connect() as conn:
+        with self._transaction() as conn:
             rows = conn.execute(
                 "SELECT up, latency_ms, checked_at FROM checks WHERE target = ?"
                 " ORDER BY id DESC LIMIT ?", (target, limit)).fetchall()
@@ -101,7 +117,7 @@ class Store:
 
     def prune(self, keep_days: int) -> int:
         cutoff = (datetime.now(timezone.utc) - timedelta(days=keep_days)).isoformat()
-        with self._lock, self._connect() as conn:
+        with self._lock, self._transaction() as conn:
             cursor = conn.execute("DELETE FROM checks WHERE checked_at < ?", (cutoff,))
             return cursor.rowcount
 

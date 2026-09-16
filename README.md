@@ -91,6 +91,23 @@ connection; the HTTP server is a `ThreadingHTTPServer` reading from its own
 connections. Uptime and average latency are computed in SQL with correlated
 subqueries rather than in Python, so the API stays fast as history grows.
 
+## Tests
+
+40 tests, 81% line coverage. No dependencies, and **no test contacts a
+real external service** — network-facing code is exercised against local fake
+servers bound to an ephemeral port.
+
+```bash
+# Run the suite
+python3 -m unittest discover -s tests -v
+
+# Fail on any leaked socket, file, or database connection
+python3 -W error::ResourceWarning -m unittest discover -s tests
+```
+
+CI runs the suite on Python 3.10–3.13 on every push, plus a coverage gate and a
+3.10 syntax check. See [.github/workflows/tests.yml](.github/workflows/tests.yml).
+
 ## License
 
 MIT — see [LICENSE](LICENSE).

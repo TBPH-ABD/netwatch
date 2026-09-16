@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>netwatch</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="bar">
+    <h1>netwatch</h1>
+    <div class="meta">
+      <span id="summary">loading...</span>
+      <span class="dot" aria-hidden="true">&middot;</span>
+      <span id="updated">&nbsp;</span>
+    </div>
+  </header>
+
+  <main>
+    <section class="tiles" id="tiles" aria-live="polite"></section>
+
+    <section class="panel" id="detail" hidden>
+      <div class="panel-head">
+        <h2 id="detail-title">History</h2>
+        <button type="button" id="close-detail" class="close">Close</button>
+      </div>
+      <div id="chart" class="chart"></div>
+      <p class="hint" id="detail-hint"></p>
+    </section>
+
+    <p class="empty" id="empty" hidden>
+      No checks recorded yet. The first polling round is still running.
+    </p>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

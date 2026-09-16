@@ -1,0 +1,6 @@
+[
+  { "name": "local-ssh",      "host": "127.0.0.1",       "port": 22 },
+  { "name": "cloudflare-dns", "host": "1.1.1.1",         "port": 53 },
+  { "name": "example-https",  "host": "example.com",     "port": 443 },
+  { "name": "unreachable",    "host": "192.0.2.1",       "port": 9999 }
+]

@@ -143,21 +143,25 @@ def probe(host: str, port: int, timeout: float) -> tuple[bool, float | None, str
 class Poller(threading.Thread):
     """Background thread that probes every configured target on an interval."""
 
-    daemon = True
-
     def __init__(self, targets: list[dict], store: Store, interval: float,
                  timeout: float, keep_days: int) -> None:
-        super().__init__(name="netwatch-poller")
+        # daemon is a property on Thread, so it is set through the constructor
+        # rather than shadowed with a class attribute.
+        super().__init__(name="netwatch-poller", daemon=True)
         self.targets = targets
         self.store = store
         self.interval = interval
         self.timeout = timeout
         self.keep_days = keep_days
-        self._stop = threading.Event()
+        # Named _stop_event, not _stop: threading.Thread has a private
+        # _stop() method in CPython <= 3.12, and assigning an Event over it
+        # makes the thread raise "'Event' object is not callable" when it
+        # exits. Caught by the CI matrix on 3.10-3.12.
+        self._stop_event = threading.Event()
         self._last_prune = time.time()
 
     def run(self) -> None:
-        while not self._stop.is_set():
+        while not self._stop_event.is_set():
             for target in self.targets:
                 up, latency, error = probe(
                     target["host"], target["port"], self.timeout)
@@ -167,10 +171,10 @@ class Poller(threading.Thread):
             if time.time() - self._last_prune > 3600:
                 self.store.prune(self.keep_days)
                 self._last_prune = time.time()
-            self._stop.wait(self.interval)
+            self._stop_event.wait(self.interval)
 
     def stop(self) -> None:
-        self._stop.set()
+        self._stop_event.set()
 
 
 # --------------------------------------------------------------------------

@@ -256,3 +256,50 @@ class TestPoller(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestPollerThreadHygiene(unittest.TestCase):
+    """Regression guard for a bug the CI matrix caught on Python 3.10-3.12.
+
+    `threading.Thread` has a private `_stop()` method in CPython <= 3.12.
+    Storing an Event on `self._stop` shadowed it, and the thread raised
+    "'Event' object is not callable" as it exited — invisible on 3.13+.
+    """
+
+    def build(self) -> tuple[netwatch.Poller, Store, tempfile.TemporaryDirectory]:
+        tmp = tempfile.TemporaryDirectory()
+        store = Store(os.path.join(tmp.name, "nw.db"))
+        host, port = closed_port()
+        poller = netwatch.Poller([{"name": "t", "host": host, "port": port}],
+                                 store, interval=0.05, timeout=0.5, keep_days=7)
+        return poller, store, tmp
+
+    def test_poller_does_not_shadow_thread_internals(self):
+        poller, _, tmp = self.build()
+        with tmp:
+            # Any attribute Thread uses internally must not be an Event.
+            for name in ("_stop", "_bootstrap", "_bootstrap_inner"):
+                attr = getattr(poller, name, None)
+                self.assertNotIsInstance(
+                    attr, threading.Event,
+                    f"Poller.{name} shadows a threading.Thread internal")
+
+    def test_thread_exits_without_raising(self):
+        poller, _, tmp = self.build()
+        errors = []
+        original = threading.excepthook
+        threading.excepthook = lambda args: errors.append(args.exc_value)
+        try:
+            with tmp:
+                poller.start()
+                poller.stop()
+                poller.join(timeout=5)
+        finally:
+            threading.excepthook = original
+        self.assertFalse(poller.is_alive(), "poller thread did not terminate")
+        self.assertEqual(errors, [], f"thread raised on exit: {errors}")
+
+    def test_poller_runs_as_a_daemon(self):
+        poller, _, tmp = self.build()
+        with tmp:
+            self.assertTrue(poller.daemon)

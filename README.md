@@ -93,7 +93,7 @@ subqueries rather than in Python, so the API stays fast as history grows.
 
 ## Tests
 
-40 tests, 81% line coverage. No dependencies, and **no test contacts a
+43 tests, 81% line coverage. No dependencies, and **no test contacts a
 real external service** — network-facing code is exercised against local fake
 servers bound to an ephemeral port.
 
